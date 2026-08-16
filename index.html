@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>拉摸工资记账</title>
+<style>
+body{
+  margin:0;padding:8px;
+  max-width:700px;margin:0 auto;
+  background:#f5f7fa;
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",
+  "Microsoft YaHei",system-ui,sans-serif;
+  -webkit-tap-highlight-color:transparent;
+}
+.calendar-wrap{background:#fff;border-radius:10px;padding:10px;margin-bottom:10px}
+.cal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.cal-header button{background:none;border:none;font-size:18px;padding:4px 10px}
+#curMonthText{font-size:15px;font-weight:600}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal-day{position:relative;width:100%;padding-top:100%;border:1px solid #eee;border-radius:6px;font-size:12px}
+.cal-day>div{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.cal-day.active{background:#2563eb;color:#fff;border-color:#2563eb}
+.cal-day.has-data{border-color:#60a5fa}
+.day-sub{font-size:11px;opacity:.9}
+.money-rich{color:#22c55e;font-weight:600}
+.cal-day.active .money-rich{color:#bbf7d0}
+
+.stat-box{background:#fff;border-radius:10px;padding:12px;margin-bottom:10px}
+.stat-title{font-size:14px;color:#444;margin-bottom:6px}
+.stat-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.stat-item{background:#f1f5f9;padding:8px;border-radius:8px;text-align:center}
+.stat-val{font-size:18px;font-weight:700;color:#1e40af}
+.stat-lab{font-size:11px;color:#666}
+
+.detail-wrap{background:#fff;border-radius:10px;padding:12px;margin-bottom:10px}
+.btn{padding:8px 12px;border:none;border-radius:8px;background:#2563eb;color:#fff;font-size:14px}
+.btn-danger{background:#dc2626}
+.record-item{border-bottom:1px solid #eee;padding:10px 0;font-size:13px}
+
+/* 小图 */
+.img-thumb{
+  width:56px;height:56px;object-fit:cover;border-radius:4px;
+  margin-right:4px;cursor:pointer;
+}
+
+/* 大图查看 */
+.img-viewer{
+  position:fixed;inset:0;background:rgba(0,0,0,.85);
+  display:none;align-items:center;justify-content:center;
+  z-index:9999;padding:10px;
+}
+.img-viewer img{max-width:100%;max-height:90vh;border-radius:8px}
+
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;padding:10px;z-index:99}
+.modal .inner{background:#fff;width:100%;max-width:440px;border-radius:10px;padding:14px}
+input,select,textarea{width:100%;padding:8px;margin:6px 0;border:1px solid #ccc;border-radius:6px;font-size:15px}
+
+/* 底部 */
+.footer-group{margin-top:14px;margin-bottom:20px;padding:14px 10px;background:linear-gradient(135deg,#fffbeb,#fff7ed);border-radius:12px;border:1px solid #fde68a;text-align:center}
+.group-line{font-size:17px;font-weight:600;color:#b45309;letter-spacing:1px}
+.group-num{font-size:22px;font-weight:800;color:#d97706;margin:6px 0 4px;letter-spacing:2px;font-family:Menlo,Consolas,monospace;padding:4px 10px;border-radius:6px;cursor:pointer}
+.group-num:active{background:#fde68a}
+.group-tip{font-size:12px;color:#a16207;opacity:.85}
+
+.toast{
+  position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);
+  background:#1e293b;color:#fff;font-size:13px;padding:10px 18px;border-radius:999px;
+  opacity:0;pointer-events:none;transition:.35s ease;z-index:999;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+
+<body>
+
+<div class="calendar-wrap">
+<div class="cal-header">
+<button id="prevMonth">←</button>
+<div id="curMonthText"></div>
+<button id="nextMonth">→</button>
+</div>
+<div class="cal-grid" id="calGrid"></div>
+</div>
+
+<div class="stat-box">
+<div class="stat-title">📊 本月统计</div>
+<div class="stat-row">
+<div class="stat-item"><div class="stat-val" id="statTotalWage">0</div><div class="stat-lab">本月总收入(元)</div></div>
+<div class="stat-item"><div class="stat-val" id="statTodayHour">0</div><div class="stat-lab">今日工时(h)</div></div>
+<div class="stat-item"><div class="stat-val" id="statTotalPiece">0</div><div class="stat-lab">总件数</div></div>
+<div class="stat-item"><div class="stat-val" id="statTodayIncome">0</div><div class="stat-lab">今日收入</div></div>
+</div>
+</div>
+
+<div class="detail-wrap">
+<div style="display:flex;justify-content:space-between;align-items:center">
+<h4 id="selDateText" style="font-size:15px">选择日期</h4>
+<button class="btn" id="openAddModal">+新增记账</button>
+</div>
+<div id="recordList"></div>
+</div>
+
+<!-- 看图 -->
+<div class="img-viewer" id="imgViewer" onclick="this.style.display='none'">
+  <img id="viewerImg">
+</div>
+
+<div class="footer-group">
+  <div class="group-line">🤝 全国拉摸交流群</div>
+  <div class="group-num" id="copyGroupNum">v5876855</div>
+  <div class="group-tip">点击群主号复制拉群 · 一起记账 · 一起搬砖</div>
+</div>
+
+<div class="toast" id="toastBox"></div>
+
+<div class="modal" id="addModal">
+<div class="inner">
+<h4>记账录入</h4>
+<label>记账类型</label>
+<select id="recType">
+<option value="time">计时</option>
+<option value="piece">计件</option>
+</select>
+<label id="labelTime">工时(小时)</label>
+<input type="number" step="0.01" id="inpHour" placeholder="例如8.5">
+<label id="labelPiece" style="display:none">计件数量</label>
+<input type="number" step="1" id="inpPiece" placeholder="件数" style="display:none">
+<label>今日收入</label>
+<input type="number" step="0.01" id="inpIncome" placeholder="填写本条今日收入">
+<label>备注</label>
+<textarea id="inpNote" rows="2" placeholder="工作内容备注"></textarea>
+
+<label>📸 拍工价单（可连续拍多张）</label>
+<input type="file" id="inpImg" accept="image/*" capture="environment">
+<div id="imgPreview" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px"></div>
+
+<div style="display:flex;gap:8px;margin-top:10px">
+<button class="btn" id="saveRec">保存</button>
+<button class="btn btn-danger" id="closeModal">取消</button>
+</div>
+</div>
+</div>
+
+<script>
+const STORAGE_KEY="wageRecordData";
+let appData=JSON.parse(localStorage.getItem(STORAGE_KEY)||"[]");
+let curDate=new Date(),selectedDate=null,tempImages=[];
+
+/* 120天清 */
+function cleanOld(){
+  const cut=new Date();cut.setDate(cut.getDate()-120);
+  appData=appData.filter(r=>new Date(r.date)>=cut);
+}
+cleanOld();
+
+function tip(msg){
+  toastBox.innerText=msg;toastBox.classList.add("show");
+  setTimeout(()=>toastBox.classList.remove("show"),1500);
+}
+function saveStorage(){localStorage.setItem(STORAGE_KEY,JSON.stringify(appData))}
+function dayStr(d){return d.toISOString().slice(0,10)}
+function getList(d){return appData.filter(r=>r.date===dayStr(d))}
+function sumDay(d){let w=0,h=0;getList(d).forEach(r=>{w+=+r.income;if(r.type==="time")h+=+r.hour});return{w,h}}
+
+/* 日历 */
+function renderCalendar(){
+  const y=curDate.getFullYear(),m=curDate.getMonth();
+  curMonthText.innerText=y+"-"+(m+1).toString().padStart(2,"0");
+  calGrid.innerHTML="";
+  const first=new Date(y,m,1),start=first.getDay(),days=new Date(y,m+1,0).getDate();
+  for(let i=0;i<start;i++)calGrid.appendChild(document.createElement("div"));
+  for(let d=1;d<=days;d++){
+    const dt=new Date(y,m,d),s=sumDay(dt),div=document.createElement("div");
+    const moneyHtml = s.w>=300 ? `<span class="money-rich">¥${s.w.toFixed(0)}</span>` : (s.w>0?`¥${s.w.toFixed(0)}`:"");
+    div.className="cal-day"+(getList(dt).length?" has-data":"")+(selectedDate&&dt.toDateString()===selectedDate.toDateString()?" active":"");
+    div.innerHTML=`<div><div>${d}</div><div class="day-sub">${moneyHtml}</div></div>`;
+    div.onclick=()=>{selectedDate=dt;renderCalendar();renderDetail();renderStat();};
+    calGrid.appendChild(div);
+  }
+}
+
+/* 明细 */
+function renderDetail(){
+  if(!selectedDate){selDateText.innerText="请点击日历选择日期";recordList.innerHTML="";return}
+  selDateText.innerText=selectedDate.toLocaleDateString()+" 记账列表";
+  const list=getList(selectedDate),w=recordList;w.innerHTML="";
+  if(!list.length){w.innerHTML="<p style='color:#888'>暂无记账</p>";return}
+  list.forEach((r,i)=>{
+    const d=document.createElement("div");d.className="record-item";
+    let imgs="";
+    (r.imgs||[]).forEach(u=>{
+      imgs+=`<img class="img-thumb" src="${u}" onclick="openViewer('${u}')">`;
+    });
+    d.innerHTML=`
+    <div>类型：${r.type==="time"?"计时":"计件"}</div>
+    <div>${r.type==="time"?"工时："+r.hour+"h":"件数："+r.piece}</div>
+    <div>今日收入：${r.income} 元</div>
+    <div>备注：${r.note||""}</div>
+    <div style="display:flex;flex-wrap:wrap">${imgs}</div>
+    <button class="btn btn-danger" style="margin-top:6px" onclick="delRec(${i})">删除</button>`;
+    w.appendChild(d);
+  });
+}
+
+function openViewer(src){
+  viewerImg.src=src;imgViewer.style.display="flex";
+}
+
+window.delRec=function(i){
+  const list=getList(selectedDate);
+  appData.splice(appData.indexOf(list[i]),1);
+  saveStorage();renderCalendar();renderDetail();renderStat();
+};
+
+/* 统计 */
+function renderStat(){
+  const y=curDate.getFullYear(),m=curDate.getMonth();
+  let wMonth=0,hMonth=0,pMonth=0,todayW=0,todayH=0;
+  appData.forEach(r=>{
+    const d=new Date(r.date);
+    if(d.getFullYear()!==y||d.getMonth()!==m)return;
+    const inc=+r.income;
+    wMonth+=inc;
+    if(r.type==="piece")pMonth+=+r.piece;
+    if(r.type==="time")hMonth+=+r.hour;
+    if(selectedDate&&r.date===dayStr(selectedDate)){todayW+=inc;if(r.type==="time")todayH+=+r.hour}
+  });
+  statTotalWage.innerText=wMonth.toFixed(2);
+  statTotalHour.innerText=hMonth.toFixed(1);
+  statTotalPiece.innerText=pMonth;
+  statTodayIncome.innerText=todayW.toFixed(2);
+  statTodayHour.innerText=todayH.toFixed(1);
+}
+
+/* 压缩 */
+function compressImage(file){
+  return new Promise(res=>{
+    const img=new Image();
+    img.onload=()=>{
+      let w=img.width,h=img.height,max=1200;
+      if(w>max){h*=max/w;w=max}
+      const cvs=document.createElement("canvas");
+      cvs.width=w;cvs.height=h;
+      cvs.getContext("2d").drawImage(img,0,0,w,h);
+      let q=0.9;
+      const go=()=>{
+        const d=cvs.toDataURL("image/jpeg",q);
+        (d.length/1024>300&&q>0.3)?(q-=0.08,go()):res(d);
+      };go();
+    };
+    img.src=URL.createObjectURL(file);
+  });
+}
+
+/* ✅ 拍照追加（不清空） */
+inpImg.onchange=async e=>{
+  for(let f of e.target.files){
+    const base64=await compressImage(f);
+    tempImages.push(base64);
+  }
+  imgPreview.innerHTML=tempImages.map(u=>"<img class='img-thumb' src='"+u+"' onclick=\"openViewer('"+u+"')\">").join("");
+  e.target.value=""; // ✅ 关键：允许再拍
+};
+
+/* 弹窗 */
+openAddModal.onclick=()=>{if(!selectedDate)return tip("请先选择日期");addModal.style.display="flex";tempImages=[];imgPreview.innerHTML=""};
+closeModal.onclick=()=>addModal.style.display="none";
+recType.onchange=()=>{
+  const t=recType.value;
+  labelTime.style.display=inpHour.style.display=t==="time"?"block":"none";
+  labelPiece.style.display=inpPiece.style.display=t==="piece"?"block":"none";
+};
+saveRec.onclick=()=>{
+  appData.push({
+    date:dayStr(selectedDate),type:recType.value,
+    hour:inpHour.value,piece:inpPiece.value,
+    income:inpIncome.value,note:inpNote.value,imgs:[...tempImages]
+  });
+  saveStorage();cleanOld();
+  addModal.style.display="none";renderCalendar();renderDetail();renderStat();
+  tip("保存成功 ✅");
+};
+prevMonth.onclick=()=>{curDate=new Date(curDate.getFullYear(),curDate.getMonth()-1,1);renderCalendar();renderStat()};
+nextMonth.onclick=()=>{curDate=new Date(curDate.getFullYear(),curDate.getMonth()+1,1);renderCalendar();renderStat()};
+
+copyGroupNum.onclick=()=>{
+  navigator.clipboard.writeText("v5876855").then(()=>tip("✅ 群主号已复制，快去加群！"));
+};
+
+renderCalendar();renderStat();
+</script>
+</body>
+</html>
