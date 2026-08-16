@@ -1,0 +1,42 @@
+name: Build WebView APK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: 17
+
+    - name: Download Android Template APK
+      run: |
+        curl -L -o app.apk https://github.com/didikee/WebViewShell/releases/download/1.0/app-release-unsigned.apk
+
+    - name: Inject HTML into APK assets
+      run: |
+        echo "index.html 塞进 APK"
+        apt-get update && apt-get install -y aapt apksigner zipalign
+        mkdir -p assets
+        cp index.html assets/index.html
+        aapt add app.apk assets/index.html || true
+
+    - name: Align & Sign (fake key)
+      run: |
+        keytool -genkeypair -v -keystore key.jks -keyalg RSA -keysize 2048 -validity 10000 -alias key -storepass 123456 -keypass 123456 -dname "CN=Gongjia"
+        zipalign -f 4 app.apk aligned.apk
+        apksigner sign --ks key.jks --ks-pass pass:123456 --out gongjia.apk aligned.apk
+
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: 工资日历-APK
+        path: gongjia.apk
